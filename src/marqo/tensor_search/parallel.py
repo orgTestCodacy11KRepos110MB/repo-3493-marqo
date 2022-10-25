@@ -2,6 +2,7 @@ import os
 import time
 from typing import List, Dict
 import copy
+import itertools
 
 import torch
 import numpy as np
@@ -9,6 +10,8 @@ from torch import multiprocessing as mp
 
 from marqo.tensor_search import tensor_search
 from marqo.marqo_logging import logger
+from marqo.tensor_search.enums import AddDocumentsReturnKeys
+from marqo import errors
 
 try:
     mp.set_start_method('spawn', force=True)
@@ -208,4 +211,58 @@ def add_documents_mp(config=None, index_name=None, docs=None,
         results = pool.map(_run_chunker, chunkers)
     end = time.time()
     logger.info(f"finished indexing all documents. took {end - start} seconds to index {n_documents} documents")
-    return results
+    return _consolidate_pool_results(results)
+    
+def _consolidate_pool_results(results: List[List[Dict]]) -> Dict:
+    """consolidates the results from multiple processes into a standardixed dict
+
+    Args:
+        results (List[Dict]): the list of results from the mp indexing
+
+    Raises:
+        errors.InternalError: raises if the types of the results differ
+        errors.InternalError: raises if there are more than one index in the results
+        errors.InternalError: raises if there is a type error for the result
+
+    Returns:
+        Dict: _description_
+    """
+    if isinstance(results, dict):
+        return results
+
+    elif isinstance(results, list):
+        # because we batch and also split across processes we end up with a list of lists of dicts
+        type_check_list_o_list = all(isinstance(result, list) for result in results)
+
+        if not type_check_list_o_list:
+            raise errors.InternalError(f"""return types from multiprocessing indexing do not match.
+                                    expected all lists but found {[type(result) for result in results]}""")
+
+        flat_results = list(itertools.chain(*results))
+        
+        type_check_list_o_dict = all(isinstance(result, dict) for result in flat_results)
+
+        if not type_check_list_o_dict:
+            raise errors.InternalError(f"""return types from multiprocessing indexing do not match.
+                                    expected all dicts but found {[type(result) for result in flat_results]}""")
+
+        index_name = list(set([result[AddDocumentsReturnKeys.index_name] for result in flat_results]))
+
+        if len(index_name) != 1:
+            raise errors.InternalError("""found multiple index names after 
+                                indexing across a single index. expected one but found {index_name}""")
+
+        result_errors = any(result[AddDocumentsReturnKeys.errors] for result in flat_results)
+        processing_time = max(result[AddDocumentsReturnKeys.processingTimeMs] for result in flat_results)
+        items = [item for result in flat_results for item in result[AddDocumentsReturnKeys.items]]
+        
+        consolidated_result = dict()
+        consolidated_result[AddDocumentsReturnKeys.errors] = result_errors
+        consolidated_result[AddDocumentsReturnKeys.processingTimeMs] = processing_time
+        consolidated_result[AddDocumentsReturnKeys.items] = items
+        consolidated_result[AddDocumentsReturnKeys.index_name] = index_name[0]
+
+        return consolidated_result
+    else:
+        raise errors.InternalError(f"expected results to be either dict or list but received {type(results)}")
+

@@ -80,3 +80,9 @@ class EnvVars:
     MARQO_MAX_RETRIEVABLE_DOCS = "MARQO_MAX_RETRIEVABLE_DOCS"
 
 
+class AddDocumentsReturnKeys:
+
+    errors = "errors"
+    index_name = "index_name"
+    items = "items"
+    processingTimeMs = "processingTimeMs"
