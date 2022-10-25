@@ -5,7 +5,7 @@ from marqo.tensor_search import parallel
 import torch
 from tests.marqo_test import MarqoTestCase
 from marqo.tensor_search import tensor_search
-
+from marqo.errors import InternalError
 
 class TestAddDocumentsPara(MarqoTestCase):
     """
@@ -106,7 +106,6 @@ class TestAddDocumentsPara(MarqoTestCase):
 
         assert res['hits'][0]['text'] == 'something 1'
 
-
     def test_consolidate_mp_results(self) -> None:
 
         result1 = [{'errors': False,
@@ -160,4 +159,75 @@ class TestAddDocumentsPara(MarqoTestCase):
                 {'_id': 'as', 'result': 'updated', 'status': 200}
                 ]
 
-        
+    def test_consolidate_mp_results_single(self) -> None:
+
+        result1 = [{'errors': False,
+        'index_name': 'my-tes-index-1',
+        'items': [{'_id': '123', 'result': 'updated', 'status': 200},
+                {'_id': '2b049cf5-c75f-4230-8dcb-4431b8a58370',
+                    'result': 'created',
+                    'status': 201},
+                {'_id': '456', 'result': 'updated', 'status': 200}],
+        'processingTimeMs': 11805.557999999999}]
+
+        consolidated_result = parallel._consolidate_pool_results(result1)
+
+        assert consolidated_result['errors'] == False
+        assert consolidated_result['index_name'] == 'my-tes-index-1'
+        assert consolidated_result['processingTimeMs'] == 11805.557999999999
+        assert consolidated_result['items'] == [{'_id': '123', 'result': 'updated', 'status': 200},
+                {'_id': '2b049cf5-c75f-4230-8dcb-4431b8a58370',
+                    'result': 'created',
+                    'status': 201},
+                {'_id': '456', 'result': 'updated', 'status': 200}]
+
+    def test_consolidate_mp_results_dict(self) -> None:
+
+        result1 = {'errors': False,
+        'index_name': 'my-tes-index-1',
+        'items': [{'_id': '123', 'result': 'updated', 'status': 200},
+                {'_id': '2b049cf5-c75f-4230-8dcb-4431b8a58370',
+                    'result': 'created',
+                    'status': 201},
+                {'_id': '456', 'result': 'updated', 'status': 200}],
+        'processingTimeMs': 11805.557999999999}
+
+        consolidated_result = parallel._consolidate_pool_results(result1)
+
+        assert consolidated_result['errors'] == False
+        assert consolidated_result['index_name'] == 'my-tes-index-1'
+        assert consolidated_result['processingTimeMs'] == 11805.557999999999
+        assert consolidated_result['items'] == [{'_id': '123', 'result': 'updated', 'status': 200},
+                {'_id': '2b049cf5-c75f-4230-8dcb-4431b8a58370',
+                    'result': 'created',
+                    'status': 201},
+                {'_id': '456', 'result': 'updated', 'status': 200}]
+    
+    def test_consolidate_mp_results_wrong_types(self) -> None:
+
+        result1 = [{'errors': False,
+            'index_name': 'my-tes-index-1',
+            'items': [{'_id': '123', 'result': 'updated', 'status': 200},
+                    {'_id': '2b049cf5-c75f-4230-8dcb-4431b8a58370',
+                        'result': 'created',
+                        'status': 201},
+                    {'_id': '456', 'result': 'updated', 'status': 200}],
+            'processingTimeMs': 11805.557999999999}]
+
+        result2 = {'errors': False,
+        'index_name': 'my-tes-index-1',
+        'items': [{'_id': '1123', 'result': 'updated', 'status': 200},
+                {'_id': '212b049cf5-c75f-4230-8dcb-4431b8a58370',
+                    'result': 'created',
+                    'status': 201},
+                {'_id': '45126', 'result': 'updated', 'status': 200}],
+        'processingTimeMs': 21805.557999999999}
+
+        results = [result1, result2]
+
+        try:
+            consolidated_result = parallel._consolidate_pool_results(results)
+        except InternalError as e:
+            pass
+
+    
