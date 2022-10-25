@@ -231,14 +231,21 @@ def _consolidate_pool_results(results: List[List[Dict]]) -> Dict:
         return results
 
     elif isinstance(results, list):
-        # because we batch and also split across processes we end up with a list of lists of dicts
-        type_check_list_o_list = all(isinstance(result, list) for result in results)
+        
+        if len(results) == 0:
+            return results
 
-        if not type_check_list_o_list:
-            raise errors.InternalError(f"""return types from multiprocessing indexing do not match.
-                                    expected all lists but found {[type(result) for result in results]}""")
+        if isinstance(results[0], list):
+            # because we batch and also split across processes we end up with a list of lists of dicts
+            type_check_list_o_list = all(isinstance(result, list) for result in results)
 
-        flat_results = list(itertools.chain(*results))
+            if not type_check_list_o_list:
+                raise errors.InternalError(f"""return types from multiprocessing indexing do not match.
+                                        expected all lists but found {[type(result) for result in results]}""")
+
+            flat_results = list(itertools.chain(*results))
+        else:
+            flat_results = results
         
         type_check_list_o_dict = all(isinstance(result, dict) for result in flat_results)
 
