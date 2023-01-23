@@ -813,7 +813,8 @@ def search(config: Config, index_name: str, text: str, result_count: int = 3, of
     
 
     t0 = timer()
-
+    x = "test. delete this later." # TODO DELETE
+    
     if searchable_attributes is not None:
         [validation.validate_field_name(attribute) for attribute in searchable_attributes]
     if attributes_to_retrieve is not None:
